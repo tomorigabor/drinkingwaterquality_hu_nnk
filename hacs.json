@@ -1,0 +1,7 @@
+{
+  "name": "Drinking Water Quality HU",
+  "content_in_root": false,
+  "render_readme": true,
+  "country": ["HU"],
+  "domains": ["binary_sensor"]
+}
