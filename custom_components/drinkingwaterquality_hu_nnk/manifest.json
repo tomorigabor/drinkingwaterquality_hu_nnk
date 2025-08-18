@@ -1,0 +1,11 @@
+{
+  "domain": "drinkingwaterquality_hu_nnk",
+  "name": "Drinking Water Quality HU",
+  "version": "0.3.4",
+  "config_flow": true,
+  "documentation": "https://github.com/tomorigabor/drinkingwaterquality_hu_nnk",
+  "issue_tracker": "https://github.com/tomorigabor/drinkingwaterquality_hu_nnk/issues",
+  "requirements": ["beautifulsoup4>=4.12.2"],
+  "codeowners": ["@tomorigabor"],
+  "iot_class": "cloud_polling"
+}
