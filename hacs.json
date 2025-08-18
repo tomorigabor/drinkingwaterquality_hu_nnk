@@ -1,5 +1,6 @@
 {
   "name": "Drinking Water Quality HU",
   "content_in_root": false,
-  "render_readme": true
+  "render_readme": true,
+  "country": ["HU"]
 }
