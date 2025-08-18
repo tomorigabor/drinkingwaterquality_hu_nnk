@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Új település felvétele",
+        "description": "Add meg a település ID-ját!\n[Erre](https://www.nnk.gov.hu/index.php/kornyezetegugy/kornyezetegeszsegugyi-laboratoriumi-osztaly/vizhigienes-laboratorium/ivoviz/magyarorszagi-telepulesek-ivovizminosege.html) a linkre kattintva keresd ki a kívánt települést. A település nevére kattintva megjelenő ablak linkjének végéből add meg az „&id=” utáni számsort!",
+        "data": {
+          "placemark_id": "Település ID"
+        }
+      }
+    }
+  }
+}
