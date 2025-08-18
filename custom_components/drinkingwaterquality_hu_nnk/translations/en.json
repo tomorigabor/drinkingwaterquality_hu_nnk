@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a settlement",
+        "description": "Enter the settlement ID.\nClick [here](https://www.nnk.gov.hu/index.php/kornyezetegugy/kornyezetegeszsegugyi-laboratoriumi-osztaly/vizhigienes-laboratorium/ivoviz/magyarorszagi-telepulesek-ivovizminosege.html) to find your settlement. After opening the settlement page, copy the number after \"&id=\" from the URL.",
+        "data": {
+          "placemark_id": "Placemark ID"
+        }
+      }
+    }
+  }
+}
