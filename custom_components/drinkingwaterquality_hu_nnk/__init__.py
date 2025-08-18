@@ -13,6 +13,8 @@ from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN, PLATFORMS
 from .coordinator import NNKCoordinator
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data.setdefault(DOMAIN, {})
     return True
