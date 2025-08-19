@@ -9,6 +9,7 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import NNKCoordinator
