@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.5
+– fix: add missing config_validation import in __init__.py
+
 ## 0.3.4
 - First stable release
 - Config flow (UI setup)
