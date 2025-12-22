@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.7
+### Changed
+- Device name now updates after first refresh: device registry is renamed to `Ivóvíz — <település>` instead of keeping the initial “Placemark”.
+- Binary sensor consistently exposes device info (`device_info`) with the current settlement name.
+
+### Fixed
+- Restored platform entrypoint (`async_setup_entry`) in `binary_sensor.py` to prevent platform setup errors.
+- Strict rating evaluation aligned to the 4 official phrases only (exact match, accent/case-insensitive).
+
 ## 0.3.6
 ### Changed
 - Hardened fetching logic for the NNGYK page: attempt secure TLS first, then gracefully fall back to an insecure (`ssl=False`) request only if certificate chain validation fails, ensuring data still refreshes.
