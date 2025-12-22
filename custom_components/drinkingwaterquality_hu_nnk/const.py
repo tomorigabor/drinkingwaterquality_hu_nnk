@@ -8,8 +8,13 @@ BASE_URL = (
 )
 URL_TEMPLATE = BASE_URL + "?view=placemark&id={placemark_id}"
 
-# Ezeket tekintjük „OK” minősítésnek
-OK_PHRASES = [
-    "Megfelelő minőségű ivóvíz",
-    "Megfelelő, indikátor paraméterek miatt tűrhető minőségű ivóvíz",
-]
+# Csak a 4 hivatalos kifejezés – pontos egyezés (normalizálva) alapján
+OK_PHRASES_EXACT = {
+    "biztonságosan fogyasztható ivóvíz",
+    "biztonságosan fogyasztható ivóvíz, amelyben egészségre nem ártalmas bakteriológiai vagy kémiai eltérés tapasztalható",
+}
+
+PROBLEM_PHRASES_EXACT = {
+    "biztonságosan fogyasztható ivóvíz, amelyben eseti bakteriológiai vagy kémiai eltérés tapasztalható",
+    "nem iható víz, kémiai szempontból nem elfogadható",
+}

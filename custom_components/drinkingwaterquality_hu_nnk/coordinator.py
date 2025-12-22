@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientSession
 from bs4 import BeautifulSoup
 
 from homeassistant.core import HomeAssistant
@@ -13,13 +13,18 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
-from .const import URL_TEMPLATE, OK_PHRASES
+from .const import (
+    URL_TEMPLATE,
+    OK_PHRASES_EXACT,
+    PROBLEM_PHRASES_EXACT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def _norm(s: str) -> str:
-    return " ".join((s or "").strip().split()).lower()
+    # kisbetű, több szököz összevonása, környezet levágása
+    return " ".join((s or "").strip().lower().split())
 
 
 @dataclass
@@ -32,43 +37,51 @@ class DWQData:
 
 
 class NNKCoordinator(DataUpdateCoordinator[DWQData]):
-    """Oldal letöltés + értelmezés."""
-
     def __init__(self, hass: HomeAssistant, placemark_id: int) -> None:
-        super().__init__(hass, _LOGGER, name="NNGYK Drinking Water")
+        super().__init__(
+            hass,
+            _LOGGER,
+            name="NNGYK Drinking Water",
+            update_method=self._async_update_data,
+        )
         self._placemark_id = placemark_id
         self.source_url = URL_TEMPLATE.format(placemark_id=placemark_id)
 
-    async def _fetch_html_secure(self, session: ClientSession) -> str:
-        async with session.get(self.source_url, timeout=30) as resp:
-            resp.raise_for_status()
-            return await resp.text()
+    async def _fetch_html(self, url: str) -> str:
+        session: ClientSession = async_get_clientsession(self.hass)
 
-    async def _fetch_html_insecure(self, session: ClientSession) -> str:
-        async with session.get(self.source_url, timeout=30, ssl=False) as resp:
+        # 1) próbálkozás: validált SSL
+        try:
+            async with session.get(url, timeout=30) as resp:
+                resp.raise_for_status()
+                return await resp.text()
+        except Exception as e_secure:
+            _LOGGER.warning(
+                "Fetch (secure) failed: %s — fallback to insecure ssl=False",
+                e_secure,
+            )
+
+        # 2) vésztartalék: ssl=False
+        async with session.get(url, timeout=30, ssl=False) as resp:
             resp.raise_for_status()
             return await resp.text()
 
     async def _async_update_data(self) -> DWQData:
-        session: ClientSession = async_get_clientsession(self.hass)
-
-        # 1) Próbáljuk normál (CA ellenőrzött) módban
-        try:
-            html = await self._fetch_html_secure(session)
-        except ClientError as e:
-            _LOGGER.warning(
-                "Fetch with HA session failed (secure): %s — fallback to insecure ssl=False",
-                e,
-            )
-            # 2) Vészmegoldás: ssl=False (több usernél ez kell)
-            html = await self._fetch_html_insecure(session)
-
+        html = await self._fetch_html(self.source_url)
         soup = BeautifulSoup(html, "html.parser")
 
         rating = _extract_rating(soup) or ""
         place = _extract_place(soup) or ""
 
-        ok = any(_norm(rating) == _norm(p) for p in OK_PHRASES)
+        r_norm = _norm(rating)
+        if r_norm in OK_PHRASES_EXACT:
+            ok = True
+        elif r_norm in PROBLEM_PHRASES_EXACT:
+            ok = False
+        else:
+            # Ha nem a 4 hivatalos kifejezés valamelyike, akkor problémaként jelezzük.
+            ok = False
+
         fetched = dt_util.now().strftime("%Y-%m-%d %H:%M:%S")
 
         return DWQData(
@@ -81,7 +94,6 @@ class NNKCoordinator(DataUpdateCoordinator[DWQData]):
 
 
 def _extract_place(soup: BeautifulSoup) -> Optional[str]:
-    # „Település neve: …” szabadszöveg
     for el in soup.find_all(["strong", "b", "span", "th", "td", "p", "div"]):
         text = " ".join(el.get_text(separator=" ", strip=True).split())
         m = re.search(r"Település(?: neve)?\s*:\s*(.+)", text, flags=re.I)
@@ -90,25 +102,22 @@ def _extract_place(soup: BeautifulSoup) -> Optional[str]:
             candidate = re.split(r"\s+Minősítés\s*:", candidate)[0].strip()
             return candidate
 
-    # Táblázat: „Település” fejléccel
     for tr in soup.find_all("tr"):
         cells = tr.find_all(["th", "td"])
         for i, c in enumerate(cells):
-            if "település" in c.get_text(" ", strip=True).lower():
+            label = " ".join(c.get_text(" ", strip=True).split()).lower()
+            if label in ("település", "település neve"):
                 if i + 1 < len(cells):
                     return " ".join(cells[i + 1].get_text(" ", strip=True).split())
 
-    # Címből fallback
     for tag in soup.find_all(["h1", "h2", "title"]):
         t = " ".join(tag.get_text(" ", strip=True).split())
         if "ivóvíz" in t.lower() and "–" in t:
             return t.split("–", 1)[0].strip()
-
     return None
 
 
 def _extract_rating(soup: BeautifulSoup) -> Optional[str]:
-    # „Minősítés: …”
     for el in soup.find_all(["strong", "b", "span", "th", "td", "p", "div"]):
         text = " ".join(el.get_text(separator=" ", strip=True).split())
         m = re.search(r"Minősítés\s*:\s*(.+)", text, flags=re.I)
@@ -116,16 +125,15 @@ def _extract_rating(soup: BeautifulSoup) -> Optional[str]:
             rating = m.group(1).strip()
             rating = rating.split("  ")[0].strip()
             rating = re.split(
-                r"\s+Paraméter neve|\s+Ivóvízben|\s+Visszautalás|\s+Megjegyzés", rating
+                r"\s+Paraméter neve|\s+Ivóvízben|\s+Visszautalás|\s+Megjegyzés",
+                rating,
             )[0].strip()
             return rating
 
-    # Táblázat: „Minősítés” fejléccel
     for tr in soup.find_all("tr"):
         cells = tr.find_all(["th", "td"])
         for i, c in enumerate(cells):
-            if "minősítés" in c.get_text(" ", strip=True).lower():
+            if "minősítés" in " ".join(c.get_text(" ", strip=True).split()).lower():
                 if i + 1 < len(cells):
                     return " ".join(cells[i + 1].get_text(" ", strip=True).split())
-
     return None

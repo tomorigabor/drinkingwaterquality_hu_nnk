@@ -3,37 +3,69 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
     BinarySensorEntity,
+    BinarySensorDeviceClass,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import NNKCoordinator
 
 
-class DWQProblemSensor(CoordinatorEntity[NNKCoordinator], BinarySensorEntity):
-    """ON = probléma az ivóvíz minőségével."""
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    """
+    Platform setup – HÁ-ból hívódik, amikor a config entry betöltődik.
+    Nem csinál mást, mint előveszi a coordinator-t és felveszi az entitást.
+    """
+    coord: NNKCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    async_add_entities([DrinkingWaterBinarySensor(entry, coord)], update_before_add=True)
+
+
+class DrinkingWaterBinarySensor(CoordinatorEntity[NNKCoordinator], BinarySensorEntity):
+    """Binary sensor for drinking water quality (NNGYK)."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_has_entity_name = True
+    _attr_name = "Ivóvíz – Placemark"  # első pillanatban ez látszik; hamar felülírjuk
+    _attr_icon = "mdi:cup-water"
 
-    def __init__(self, coordinator: NNKCoordinator, name_base: str) -> None:
+    def __init__(self, entry: ConfigEntry, coordinator: NNKCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_name = f"Ivóvíz — {name_base}"
-        self._attr_unique_id = f"dwq_problem_{coordinator._placemark_id}"
+        self._entry = entry
+        self._attr_unique_id = f"dwq_{entry.entry_id}"
 
-    @property
-    def available(self) -> bool:
-        return self.coordinator.data is not None
-
+    # ---- Állapot ----
     @property
     def is_on(self) -> bool:
-        d = self.coordinator.data
-        return False if not d else (not d.ok)
+        # PROBLÉMA device-class → on = probléma, off = rendben
+        data = self.coordinator.data
+        return False if (data and data.ok) else True
 
+    # ---- Megjelenő név ----
+    @property
+    def name(self) -> str:
+        place = (self.coordinator.data.place_name if self.coordinator.data else None) or "Település"
+        return f"Ivóvíz — {place}"
+
+    # ---- Device info (NE „Placemark”) ----
+    @property
+    def device_info(self) -> DeviceInfo:
+        place = (self.coordinator.data.place_name if self.coordinator.data else None) or "Település"
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name=f"Ivóvíz — {place}",
+            manufacturer="NNGYK",
+            model="Ivóvíz minőség",
+            configuration_url=self.coordinator.source_url,
+        )
+
+    # ---- Attribútumok (magyar) ----
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         d = self.coordinator.data
@@ -45,22 +77,3 @@ class DWQProblemSensor(CoordinatorEntity[NNKCoordinator], BinarySensorEntity):
             "Forrás link": d.source_url,
             "Lekérdezési időpont": d.fetched_at,
         }
-
-    @property
-    def device_info(self) -> dict[str, Any]:
-        place = (self.coordinator.data.place_name if self.coordinator.data else "") or "Település"
-        return {
-            "identifiers": {(DOMAIN, f"placemark_{self.coordinator._placemark_id}")},
-            "manufacturer": "NNGYK",
-            "model": "Ivóvíz minőség",
-            "name": f"Ivóvíz — {place}",
-        }
-
-
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
-    """Platform-setup config entryből."""
-    coord: NNKCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    name_base = (coord.data.place_name if coord.data else "") or entry.title or "Település"
-    async_add_entities([DWQProblemSensor(coord, name_base)], update_before_add=True)
