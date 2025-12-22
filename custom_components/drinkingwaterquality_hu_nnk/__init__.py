@@ -8,46 +8,31 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import NNKCoordinator
 
-CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data.setdefault(DOMAIN, {})
     return True
 
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     placemark_id = int(entry.data["placemark_id"])
     coord = NNKCoordinator(hass, placemark_id)
-    await coord.async_config_entry_first_refresh()
+    await coord._async_update_data()  # első olvasás (koordinátor nem igényel külön init refresh-t)
 
-    place = coord.data.place_name.strip() if coord.data else ""
-    if place:
-        hass.config_entries.async_update_entry(entry, title=place)
+    # Cím frissítése településnévre, ha megvan
+    if coord.data and coord.data.place_name:
+        hass.config_entries.async_update_entry(entry, title=coord.data.place_name.strip())
 
-    try:
-        reg = dr.async_get(hass)
-        for dev in dr.async_entries_for_config_entry(reg, entry.entry_id):
-            reg.async_update_device(
-                dev.id,
-                manufacturer="NNGYK",
-                model="Ivóvíz minőség",
-                name=f"Ivóvíz — {place or 'Település'}",
-            )
-    except Exception:
-        pass
-
-
+    # Koordinátor + időzítő tárolása
     hass.data[DOMAIN][entry.entry_id] = {"coordinator": coord, "timer_unsub": None}
-
     store = hass.data[DOMAIN][entry.entry_id]
 
     async def _do_refresh(_now):
-        await coord.async_request_refresh()
+        await coord._async_update_data()
         _schedule_next()
 
     def _next_boundary(now_utc):
@@ -71,8 +56,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _schedule_next()
 
+    # Platformok betöltése
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
